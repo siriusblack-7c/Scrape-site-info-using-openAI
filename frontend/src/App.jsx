@@ -3,6 +3,7 @@ import TestForm from './components/TestForm';
 import ErrorMessage from './components/ErrorMessage';
 import LoadingSpinner from './components/LoadingSpinner';
 import TestSteps from './components/TestSteps';
+import { callOpenAI } from './openaiApi';
 
 function App() {
   const [testDescription, setTestDescription] = useState('');
@@ -15,27 +16,42 @@ function App() {
     e.preventDefault();
     setIsLoading(true);
     setError('');
+    setTestSteps([]);
+
+    const prompt = `
+      Given the following test scenario:
+      Description: ${testDescription}
+      URL: ${websiteUrl}
+
+      Generate a list of specific, actionable test steps that can be automated using Playwright.
+      Each step should be clear, concise, and executable.
+      Focus on critical user flows and functionality.
+
+      Return the response as a JSON array of objects with the following structure:
+      [
+        {
+          "description": "Step description",
+          "action": "Specific action to take (e.g., 'click', 'type', 'assert')",
+          "selector": "CSS selector or text to find the element",
+          "value": "Value to input (if applicable)"
+        }
+      ]
+    `;
 
     try {
-      // TODO: Replace with actual API call
-      const response = await fetch('http://localhost:8000/generate-tests', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          description: testDescription,
-          url: websiteUrl,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Failed to generate test steps');
+      const data = await callOpenAI(prompt);
+      // Try to extract JSON array from the response
+      const content = data.choices[0].message.content;
+      const startIdx = content.indexOf('[');
+      const endIdx = content.lastIndexOf(']') + 1;
+      let steps = [];
+      if (startIdx !== -1 && endIdx !== -1) {
+        const jsonStr = content.slice(startIdx, endIdx);
+        steps = JSON.parse(jsonStr);
+      } else {
+        throw new Error('Could not parse test steps from OpenAI response.');
       }
-
-      const data = await response.json();
-      setTestSteps(data.steps);
+      setTestSteps(steps);
     } catch (err) {
       setError(err.message || 'An unexpected error occurred. Please try again.');
     } finally {
@@ -75,10 +91,10 @@ function App() {
                 />
 
                 {isLoading && (
-                  <LoadingSpinner message="Generating test steps and executing tests..." />
+                  <LoadingSpinner message="Generating test steps using OpenAI..." />
                 )}
 
-                {!isLoading && (
+                {!isLoading && testSteps.length > 0 && (
                   <TestSteps steps={testSteps} />
                 )}
               </div>
@@ -90,4 +106,4 @@ function App() {
   );
 }
 
-export default App;
+export default App; 

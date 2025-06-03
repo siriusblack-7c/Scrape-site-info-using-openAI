@@ -74,4 +74,11 @@ class OpenAIService:
             }
             formatted_steps.append(formatted_step)
         
-        return formatted_steps 
+        return formatted_steps
+
+    def list_models(self):
+        try:
+            response = self.client.models.list()
+            return [model.id for model in response.data]
+        except Exception as e:
+            raise Exception(f"Error listing models: {str(e)}") 

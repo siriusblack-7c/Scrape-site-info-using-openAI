@@ -9,6 +9,8 @@ from playwright_service import PlaywrightService
 from database_service import DatabaseService
 from models import TestRun, TestStep
 from datetime import datetime
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.requests import Request
 
 # Load environment variables
 load_dotenv()
@@ -22,7 +24,7 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # React frontend
+    allow_origins=["*"],  # Allow all origins for development
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -149,6 +151,33 @@ async def get_test_run(test_run_id: int):
         ) for step in steps])
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
+@app.get("/models")
+async def list_models():
+    try:
+        models = openai_service.list_models()
+        return {"models": models}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/evidence/{filename}")
+async def get_evidence(filename: str):
+    screenshot_dir = os.getenv("SCREENSHOT_DIR", "screenshots")
+    file_path = os.path.join(screenshot_dir, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(file_path)
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"error": str(exc), "detail": "An unexpected error occurred. Please check your request and try again."}
+    )
 
 if __name__ == "__main__":
     import uvicorn
