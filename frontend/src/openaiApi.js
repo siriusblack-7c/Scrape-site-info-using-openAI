@@ -1,8 +1,12 @@
 import axios from "axios";
 // WARNING: This approach is for LOCAL TESTING ONLY. Never use your API key in frontend code for production!
-const OPENAI_API_KEY = "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"; // <-- Replace with your OpenAI API key
+
+const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 
 export async function callOpenAI(prompt) {
+
+    console.log(OPENAI_API_KEY, "OPENAI_API_KEY");
+    
     try {
         const response = await axios.post(
             "https://corsproxy.io/?https://api.openai.com/v1/chat/completions",
