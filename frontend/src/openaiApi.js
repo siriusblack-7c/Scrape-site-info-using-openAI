@@ -1,6 +1,6 @@
 import axios from "axios";
 // WARNING: This approach is for LOCAL TESTING ONLY. Never use your API key in frontend code for production!
-const OPENAI_API_KEY = "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"; // <-- Replace with your OpenAI API key
+const OPENAI_API_KEY = "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"; // <-- Replace with your OpenAI API key
 
 export async function callOpenAI(prompt) {
     try {
@@ -22,6 +22,7 @@ export async function callOpenAI(prompt) {
                 },
             }
         );
+        console.log(response.data, "response.data");
         return response.data;
     } catch (error) {
         throw new Error("OpenAI API error: " + (error.response?.data?.error?.message || error.message));
