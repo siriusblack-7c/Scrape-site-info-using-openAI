@@ -60,45 +60,45 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-6 flex flex-col justify-center sm:py-12">
-      <div className="relative py-3 sm:max-w-xl sm:mx-auto">
-        <div className="absolute inset-0 bg-gradient-to-r from-indigo-400 to-purple-500 shadow-lg transform -skew-y-6 sm:skew-y-0 sm:-rotate-6 sm:rounded-3xl"></div>
-        <div className="relative px-4 py-10 bg-white shadow-lg sm:rounded-3xl sm:p-20">
-          <div className="max-w-md mx-auto">
-            <div className="divide-y divide-gray-200">
-              <div className="py-8 text-base leading-6 space-y-6 text-gray-700 sm:text-lg sm:leading-7">
-                <div className="text-center space-y-2">
-                  <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
-                    AI Test Automation Tool
-                  </h1>
-                  <p className="text-sm text-gray-500">
-                    Generate and execute automated tests using AI
-                  </p>
-                </div>
-
-                <TestForm
-                  testDescription={testDescription}
-                  websiteUrl={websiteUrl}
-                  isLoading={isLoading}
-                  onDescriptionChange={(e) => setTestDescription(e.target.value)}
-                  onUrlChange={(e) => setWebsiteUrl(e.target.value)}
-                  onSubmit={handleSubmit}
-                />
-
-                <ErrorMessage
-                  message={error}
-                  onDismiss={() => setError('')}
-                />
-
-                {isLoading && (
-                  <LoadingSpinner message="Generating test steps using OpenAI..." />
-                )}
-
-                {!isLoading && testSteps.length > 0 && (
-                  <TestSteps steps={testSteps} />
-                )}
-              </div>
+    <div className="fixed inset-0 bg-gradient-to-b from-gray-50 to-gray-100 flex items-center justify-center">
+      <div className="w-full h-full max-w-6xl max-h-[90vh] bg-white shadow-2xl rounded-3xl flex overflow-hidden">
+        {/* Left: Form Panel */}
+        <div className="w-full md:w-1/2 p-8 flex flex-col justify-center border-r border-gray-100">
+          <div className="mb-8 text-center">
+            <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
+              AI Test Automation Tool
+            </h1>
+            <p className="text-sm text-gray-500 mt-2">
+              Generate and execute automated tests using AI
+            </p>
+          </div>
+          <TestForm
+            testDescription={testDescription}
+            websiteUrl={websiteUrl}
+            isLoading={isLoading}
+            onDescriptionChange={(e) => setTestDescription(e.target.value)}
+            onUrlChange={(e) => setWebsiteUrl(e.target.value)}
+            onSubmit={handleSubmit}
+          />
+        </div>
+        {/* Right: Result Panel */}
+        <div className="w-full md:w-1/2 h-full flex flex-col bg-gray-50">
+          <div className="flex-1 overflow-y-auto p-8">
+            {/* Comments Section */}
+            <div className="mb-6 p-4 bg-indigo-50 border border-indigo-100 rounded-lg text-sm text-indigo-800">
+              <strong>Result Panel:</strong> Here you will see errors, loading status, and the generated test steps. <br />
+              <span className="text-indigo-600">Tip:</span> After submitting your test description and URL, the results will appear here. Scroll if the content is long.
             </div>
+            <ErrorMessage
+              message={error}
+              onDismiss={() => setError('')}
+            />
+            {isLoading && (
+              <LoadingSpinner message="Generating test steps using OpenAI..." />
+            )}
+            {!isLoading && testSteps.length > 0 && (
+              <TestSteps steps={testSteps} />
+            )}
           </div>
         </div>
       </div>

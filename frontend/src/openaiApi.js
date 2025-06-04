@@ -4,9 +4,6 @@ import axios from "axios";
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 
 export async function callOpenAI(prompt) {
-
-    console.log(OPENAI_API_KEY, "OPENAI_API_KEY");
-    
     try {
         const response = await axios.post(
             "https://corsproxy.io/?https://api.openai.com/v1/chat/completions",
@@ -26,7 +23,6 @@ export async function callOpenAI(prompt) {
                 },
             }
         );
-        console.log(response.data, "response.data");
         return response.data;
     } catch (error) {
         throw new Error("OpenAI API error: " + (error.response?.data?.error?.message || error.message));
