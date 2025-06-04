@@ -61,3 +61,19 @@ Response:
 ```
 
 If an error occurs during testing, the response will include the error message and stop processing further steps. 
+
+## Docker Deployment
+
+To build and run the backend using Docker (with Playwright support):
+
+```bash
+# Build the Docker image
+cd backend
+docker build -t playwright-backend .
+
+# Run the Docker container
+# (You may want to set environment variables, e.g. OPENAI_API_KEY)
+docker run -it -p 8000:8000 --env OPENAI_API_KEY=your_key_here playwright-backend
+```
+
+This will start the FastAPI server with Playwright and all required dependencies in a containerized environment. 

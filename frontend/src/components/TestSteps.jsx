@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 
 function TestSteps({ steps, websiteUrl }) {
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || process.env.REACT_APP_BACKEND_URL || "http://localhost:8000";
     const [results, setResults] = useState(Array(steps.length).fill(null));
     const [testing, setTesting] = useState(false);
     const [error, setError] = useState(null);
@@ -16,7 +17,7 @@ function TestSteps({ steps, websiteUrl }) {
         for (; idx < steps.length; idx++) {
             try {
                 const response = await axios.post(
-                    'http://localhost:8000/test-steps',
+                    `${backendUrl}/test-steps`,
                     { steps: [{ content: JSON.stringify(steps[idx]) }] }
                 );
                 const resultStep = response.data.steps[0];

@@ -1,12 +1,13 @@
 import axios from "axios";
 // WARNING: This approach is for LOCAL TESTING ONLY. Never use your API key in frontend code for production!
 
-const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+const backendUrl = import.meta.env.VITE_BACKEND_URL || process.env.REACT_APP_BACKEND_URL || "http://localhost:8000";
 
 export async function callOpenAI(prompt) {
+    console.log("BACKEND_URL", backendUrl);
     try {
         const response = await axios.post(
-            "https://scrape-site-info-using-openai.onrender.com/openai-proxy",
+            `${backendUrl}/openai-proxy`,
             {
                 model: "gpt-4o-mini",
                 messages: [
