@@ -49,7 +49,12 @@ function App() {
 
     try {
       const data = await callOpenAI(prompt);
-      // Try to extract JSON array from the response
+      if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
+        if (data.error && data.error.message) {
+          throw new Error('OpenAI API error: ' + data.error.message);
+        }
+        throw new Error('OpenAI API did not return a valid response. Please check your API key and try again.');
+      }
       const content = data.choices[0].message.content;
       const startIdx = content.indexOf('[');
       const endIdx = content.lastIndexOf(']') + 1;
