@@ -1,183 +1,207 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional, Dict
+from typing import List, Optional
+import asyncio
+from playwright.async_api import async_playwright
+import json
 import os
-from dotenv import load_dotenv
-from openai_service import OpenAIService
-from playwright_service import PlaywrightService
-from database_service import DatabaseService
-from models import TestRun, TestStep
 from datetime import datetime
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.requests import Request
+import requests
+from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+app = FastAPI()
 
-app = FastAPI(
-    title="AI Test Automation API",
-    description="API for generating and executing automated tests using AI",
-    version="1.0.0"
-)
-
-# Configure CORS
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
+    allow_origins=["*"],  # In production, replace with specific origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Initialize services
-openai_service = OpenAIService()
-playwright_service = PlaywrightService()
-db_service = DatabaseService()
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+class Step(BaseModel):
+    content: str
+    test_result: Optional[str] = None
+    error: Optional[str] = None
+    # Optionally, you can add action, selector, value fields for easier access
 
 class TestRequest(BaseModel):
-    description: str
-    url: str
+    steps: List[Step]
 
-class TestStep(BaseModel):
-    description: str
-    status: Optional[str] = None
-    evidence: Optional[str] = None
-    action: Optional[str] = None
-    selector: Optional[str] = None
-    value: Optional[str] = None
-    error: Optional[str] = None
-
-class TestResponse(BaseModel):
-    steps: List[TestStep]
-
-class TestRunSummary(BaseModel):
-    id: int
-    description: str
-    url: str
-    created_at: datetime
-    total_steps: int
-    successful_steps: int
-    failed_steps: int
-    pending_steps: int
-
-@app.get("/")
-async def read_root():
-    return {"message": "AI Test Automation API is running"}
-
-@app.post("/generate-tests", response_model=TestResponse)
-async def generate_tests(request: TestRequest):
+async def run_playwright_test(step: Step) -> Step:
     try:
-        # Generate test steps using OpenAI
-        test_steps = await openai_service.generate_test_steps(
-            description=request.description,
-            url=request.url
-        )
-        
-        # Format the steps for the response
-        formatted_steps = openai_service.format_test_steps(test_steps)
-        
-        # Store the test run and steps in the database
-        test_run = db_service.create_test_run(request.description, request.url)
-        db_service.add_test_steps(test_run.id, formatted_steps)
-        
-        return TestResponse(steps=[TestStep(**step) for step in formatted_steps])
-        
+        # Parse the content as JSON to extract action, selector, value, etc.
+        try:
+            step_data = json.loads(step.content) if isinstance(step.content, str) else step.content
+        except Exception:
+            step_data = step.content if isinstance(step.content, dict) else {"description": step.content}
+
+        action = step_data.get("action")
+        selector = step_data.get("selector")
+        value = step_data.get("value")
+        url = step_data.get("value") if action == "goto" else None
+
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=False)
+            page = await browser.new_page()
+
+            # Helper for error logging
+            async def log_error_and_return(e, label="error"):
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                screenshot_path = f"{label}_screenshot_{timestamp}.png"
+                html_path = f"{label}_page_{timestamp}.html"
+                await page.screenshot(path=screenshot_path)
+                content = await page.content()
+                with open(html_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                print(f"[ERROR] {str(e)}\n[HTML] {content[:500]}")
+                step.error = f"{str(e)} | Screenshot: {screenshot_path} | HTML: {html_path}"
+                await browser.close()
+                return step
+
+            # Helper to log and save every step
+            async def log_and_save_step(label):
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                screenshot_path = f"step_{label}_{timestamp}.png"
+                html_path = f"step_{label}_{timestamp}.html"
+                await page.screenshot(path=screenshot_path)
+                content = await page.content()
+                with open(html_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                print(f"[STEP {label}]\n[HTML] {content[:500]}")
+                return content
+
+            # Helper to check for blank/error/anti-bot pages
+            def is_blank_or_error_page(page_text):
+                text = page_text.strip().lower()
+                if not text or len(text) < 50:
+                    return True
+                error_phrases = [
+                    "access denied", "bot detected", "are you human", "recaptcha", "captcha",
+                    "error", "forbidden", "not allowed", "blocked", "cloudflare"
+                ]
+                for phrase in error_phrases:
+                    if phrase in text:
+                        return True
+                return False
+
+            # Actually perform the action
+            if action == "goto" and url:
+                try:
+                    response = await page.goto(url)
+                    page_text = await log_and_save_step("goto")
+                    if not response or response.status >= 400:
+                        return await log_error_and_return(f"Navigation to {url} failed with status {response.status if response else 'No response'}.", label="goto_fail")
+                    if is_blank_or_error_page(page_text):
+                        return await log_error_and_return("Blocked by anti-bot, CAPTCHA, or blank/error page after navigation.", label="goto_fail")
+                except Exception as e:
+                    return await log_error_and_return(f"Navigation to {url} failed: {str(e)}", label="goto_fail")
+            elif action == "click" and selector:
+                try:
+                    await page.click(selector, timeout=5000)
+                    page_text = await log_and_save_step("click")
+                    if is_blank_or_error_page(page_text):
+                        return await log_error_and_return("Blocked by anti-bot, CAPTCHA, or blank/error page after click.", label="click_fail")
+                except Exception as e:
+                    return await log_error_and_return(f"Click failed for selector '{selector}': {str(e)}", label="click_fail")
+            elif action == "type" and selector and value:
+                try:
+                    await page.fill(selector, value, timeout=5000)
+                    page_text = await log_and_save_step("type")
+                    if is_blank_or_error_page(page_text):
+                        return await log_error_and_return("Blocked by anti-bot, CAPTCHA, or blank/error page after type.", label="type_fail")
+                except Exception as e:
+                    return await log_error_and_return(f"Type failed for selector '{selector}': {str(e)}", label="type_fail")
+            elif action == "waitForSelector" and selector:
+                try:
+                    await page.wait_for_selector(selector, timeout=5000)
+                    page_text = await log_and_save_step("waitForSelector")
+                    if is_blank_or_error_page(page_text):
+                        return await log_error_and_return("Blocked by anti-bot, CAPTCHA, or blank/error page after waitForSelector.", label="wait_fail")
+                except Exception as e:
+                    return await log_error_and_return(f"waitForSelector failed for selector '{selector}': {str(e)}", label="wait_fail")
+            elif action == "assertVisible" and selector:
+                try:
+                    el = await page.query_selector(selector)
+                    page_text = await log_and_save_step("assertVisible")
+                    if not el or not await el.is_visible():
+                        return await log_error_and_return(f"Element {selector} is not visible", label="assertVisible_fail")
+                    if is_blank_or_error_page(page_text):
+                        return await log_error_and_return("Blocked by anti-bot, CAPTCHA, or blank/error page after assertVisible.", label="assertVisible_fail")
+                except Exception as e:
+                    return await log_error_and_return(f"assertVisible failed for selector '{selector}': {str(e)}", label="assertVisible_fail")
+            elif action == "assert" and selector:
+                try:
+                    el = await page.query_selector(selector)
+                    page_text = await log_and_save_step("assert")
+                    if not el:
+                        return await log_error_and_return(f"Element {selector} not found", label="assert_fail")
+                    if value:
+                        text = await el.text_content()
+                        if value not in (text or ""):
+                            return await log_error_and_return(f"Expected value '{value}' not found in element text: {text}", label="assert_fail")
+                    if is_blank_or_error_page(page_text):
+                        return await log_error_and_return("Blocked by anti-bot, CAPTCHA, or blank/error page after assert.", label="assert_fail")
+                except Exception as e:
+                    return await log_error_and_return(f"assert failed for selector '{selector}': {str(e)}", label="assert_fail")
+            # After each action, check for reCAPTCHA or similar blocks
+            recaptcha_selectors = [
+                'iframe[src*="recaptcha"]',
+                'div.g-recaptcha',
+                'div.h-captcha',
+                'iframe[src*="hcaptcha"]',
+                'div[data-sitekey]',
+            ]
+            recaptcha_found = False
+            for sel in recaptcha_selectors:
+                if await page.query_selector(sel):
+                    recaptcha_found = True
+                    break
+            page_text = await page.content()
+            if ("recaptcha" in page_text.lower() or "captcha" in page_text.lower()) and recaptcha_found:
+                return await log_error_and_return("Blocked by reCAPTCHA or similar bot protection.", label="recaptcha_fail")
+
+            step.test_result = "Success"
+            await log_and_save_step("success")
+            await browser.close()
+            return step
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[FATAL ERROR] {str(e)}")
+        step.error = str(e)
+        return step
 
-@app.post("/execute-tests", response_model=TestResponse)
-async def execute_tests(request: TestRequest):
-    try:
-        # Generate test steps using OpenAI
-        test_steps = await openai_service.generate_test_steps(
-            description=request.description,
-            url=request.url
-        )
+@app.post("/test-steps")
+async def test_steps(request: TestRequest):
+    results = []
+    
+    for step in request.steps:
+        # Run the test for each step
+        result = await run_playwright_test(step)
+        results.append(result)
         
-        # Format the steps for execution
-        formatted_steps = openai_service.format_test_steps(test_steps)
-        
-        # Store the test run and steps in the database
-        test_run = db_service.create_test_run(request.description, request.url)
-        db_steps = db_service.add_test_steps(test_run.id, formatted_steps)
-        
-        # Execute the test steps using Playwright
-        executed_steps = await playwright_service.execute_test_steps(
-            url=request.url,
-            steps=formatted_steps
-        )
-        
-        # Update the database with execution results
-        for step, db_step in zip(executed_steps, db_steps):
-            db_service.update_test_step(
-                db_step.id,
-                step["status"],
-                step["evidence"]
-            )
-        
-        return TestResponse(steps=[TestStep(**step) for step in executed_steps])
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # If there's an error, stop processing further steps
+        if result.error:
+            break
+    
+    return {"steps": results}
 
-@app.get("/test-runs", response_model=List[TestRunSummary])
-async def get_test_runs(limit: int = 10):
-    """
-    Get a list of recent test runs with their summaries.
-    """
-    try:
-        test_runs = db_service.get_recent_test_runs(limit)
-        return [TestRunSummary(**db_service.get_test_run_summary(run.id)) for run in test_runs]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/test-runs/{test_run_id}", response_model=TestResponse)
-async def get_test_run(test_run_id: int):
-    """
-    Get a specific test run with its steps.
-    """
-    try:
-        test_run = db_service.get_test_run(test_run_id)
-        if not test_run:
-            raise HTTPException(status_code=404, detail="Test run not found")
-            
-        steps = db_service.get_test_steps(test_run_id)
-        return TestResponse(steps=[TestStep(
-            description=step.description,
-            status=step.status,
-            evidence=step.evidence_path,
-            created_at=step.created_at
-        ) for step in steps])
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/health")
-async def health_check():
-    return {"status": "ok"}
-
-@app.get("/models")
-async def list_models():
-    try:
-        models = openai_service.list_models()
-        return {"models": models}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/evidence/{filename}")
-async def get_evidence(filename: str):
-    screenshot_dir = os.getenv("SCREENSHOT_DIR", "screenshots")
-    file_path = os.path.join(screenshot_dir, filename)
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(file_path)
-
-@app.exception_handler(Exception)
-async def generic_exception_handler(request: Request, exc: Exception):
-    return JSONResponse(
-        status_code=500,
-        content={"error": str(exc), "detail": "An unexpected error occurred. Please check your request and try again."}
+@app.post("/openai-proxy")
+def openai_proxy(payload: dict = Body(...)):
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    response = requests.post(
+        "https://api.openai.com/v1/chat/completions",
+        headers=headers,
+        json=payload
     )
+    return response.json()
 
 if __name__ == "__main__":
     import uvicorn

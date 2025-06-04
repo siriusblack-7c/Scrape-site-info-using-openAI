@@ -6,7 +6,7 @@ const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 export async function callOpenAI(prompt) {
     try {
         const response = await axios.post(
-            "https://corsproxy.io/?https://api.openai.com/v1/chat/completions",
+            "http://localhost:8000/openai-proxy",
             {
                 model: "gpt-4o-mini",
                 messages: [
@@ -18,8 +18,7 @@ export async function callOpenAI(prompt) {
             },
             {
                 headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${OPENAI_API_KEY}`,
+                    "Content-Type": "application/json"
                 },
             }
         );
