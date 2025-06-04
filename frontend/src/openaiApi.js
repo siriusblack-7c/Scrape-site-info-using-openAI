@@ -6,7 +6,7 @@ const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 export async function callOpenAI(prompt) {
     try {
         const response = await axios.post(
-            "http://localhost:8000/openai-proxy",
+            "https://scrape-site-info-using-openai.onrender.com/openai-proxy",
             {
                 model: "gpt-4o-mini",
                 messages: [
