@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import LoadingSpinner from './LoadingSpinner';
 
 function TestSteps({ steps, websiteUrl }) {
     const backendUrl = import.meta.env.VITE_BACKEND_URL || process.env.REACT_APP_BACKEND_URL || "http://localhost:8000";
@@ -15,6 +16,7 @@ function TestSteps({ steps, websiteUrl }) {
         let newResults = [...results];
         let idx = startIdx;
         for (; idx < steps.length; idx++) {
+            setCurrentStep(idx);
             try {
                 const response = await axios.post(
                     `${backendUrl}/test-steps`,
@@ -27,7 +29,6 @@ function TestSteps({ steps, websiteUrl }) {
                     evidence: resultStep.evidence,
                 };
                 setResults([...newResults]);
-                setCurrentStep(idx);
                 if (resultStep.error) {
                     setError(resultStep.error || 'Step failed');
                     setTesting(false);
@@ -40,6 +41,7 @@ function TestSteps({ steps, websiteUrl }) {
             }
         }
         setTesting(false);
+        setCurrentStep(-1);
     };
 
     const handleSkip = () => {
@@ -59,10 +61,16 @@ function TestSteps({ steps, websiteUrl }) {
                     {steps.length} steps
                 </span>
                 <button
-                    className="ml-auto px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-blue-300"
+                    className="ml-auto px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-blue-300 flex items-center"
                     onClick={() => handleTestAllSteps(0)}
                     disabled={testing || error}
                 >
+                    {testing ? (
+                        <svg className="animate-spin h-4 w-4 text-white mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    ) : null}
                     Test All Steps
                 </button>
                 {error && (
@@ -87,49 +95,66 @@ function TestSteps({ steps, websiteUrl }) {
                                 {index + 1}
                             </span>
                             <div className="flex-1 min-w-0">
-                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                    <div><strong>Description:</strong> {step.description}</div>
-                                    {step.action && <div><strong>Action:</strong> {step.action}</div>}
-                                    {step.selector && <div><strong>Selector:</strong> {step.selector}</div>}
-                                    {step.value && <div><strong>Value:</strong> {step.value}</div>}
-                                    {results[index]?.error && (
-                                        <div className="mt-1 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-800">
-                                            <strong>Error:</strong> {(() => {
-                                                const err = String(results[index].error);
-                                                // Try to extract screenshot and HTML paths
-                                                const screenshotMatch = err.match(/Screenshot: ([^|]+) \|/);
-                                                const htmlMatch = err.match(/HTML: ([^|]+)/);
-                                                return <>
-                                                    {err.split('|')[0]}
-                                                    {screenshotMatch && (
-                                                        <>
-                                                            <br />
-                                                            <a href={screenshotMatch[1].trim()} target="_blank" rel="noopener noreferrer" className="underline text-blue-500">View Screenshot</a>
-                                                        </>
-                                                    )}
-                                                    {htmlMatch && (
-                                                        <>
-                                                            <br />
-                                                            <a href={htmlMatch[1].trim()} target="_blank" rel="noopener noreferrer" className="underline text-blue-500">View HTML</a>
-                                                        </>
-                                                    )}
-                                                </>;
-                                            })()}
-                                        </div>
+                                <div className="flex items-center text-sm font-medium text-gray-900 dark:text-gray-100">
+                                    <div className="flex-1">
+                                        <div><strong>Description:</strong> {step.description}</div>
+                                        {step.action && <div><strong>Action:</strong> {step.action}</div>}
+                                        {step.selector && <div><strong>Selector:</strong> {step.selector}</div>}
+                                        {step.value && <div><strong>Value:</strong> {step.value}</div>}
+                                    </div>
+                                    {testing && currentStep === index && (
+                                        <svg className="animate-spin h-5 w-5 text-indigo-500 ml-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
                                     )}
                                 </div>
-                                {results[index] && (
-                                    <div className={`mt-2 text-sm ${results[index].status === 'success' ? 'text-green-600' : 'text-red-600'}`}>
-                                        {results[index].status === 'success' ? '✅ Success' : `❌ Failed`}
-                                        {results[index].evidence && (
-                                            <div className="mt-1">
-                                                <a href={results[index].evidence} target="_blank" rel="noopener noreferrer" className="underline text-blue-500">View Evidence</a>
-                                            </div>
-                                        )}
+                                {results[index]?.error && (
+                                    <div className="mt-1 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-800">
+                                        <strong>Error:</strong> {(() => {
+                                            const err = String(results[index].error);
+                                            // Try to extract screenshot and HTML paths
+                                            const screenshotMatch = err.match(/Screenshot: ([^|]+) \|/);
+                                            const htmlMatch = err.match(/HTML: ([^|]+)/);
+                                            // Helper to make URLs absolute if needed
+                                            const makeAbsolute = (path) => {
+                                                if (!path) return null;
+                                                if (/^https?:\/\//.test(path)) return path;
+                                                // If already absolute (starts with /), use backendUrl as base
+                                                if (path.startsWith('/')) return backendUrl + path;
+                                                // Otherwise, treat as relative to backend
+                                                return backendUrl + '/' + path;
+                                            };
+                                            return <>
+                                                {err.split('|')[0]}
+                                                {screenshotMatch && (
+                                                    <>
+                                                        <br />
+                                                        <a href={makeAbsolute(screenshotMatch[1].trim())} target="_blank" rel="noopener noreferrer" className="underline text-blue-500">View Screenshot</a>
+                                                    </>
+                                                )}
+                                                {htmlMatch && (
+                                                    <>
+                                                        <br />
+                                                        <a href={makeAbsolute(htmlMatch[1].trim())} target="_blank" rel="noopener noreferrer" className="underline text-blue-500">View HTML</a>
+                                                    </>
+                                                )}
+                                            </>;
+                                        })()}
                                     </div>
                                 )}
                             </div>
                         </div>
+                        {results[index] && (
+                            <div className={`mt-2 text-sm ${results[index].status === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+                                {results[index].status === 'success' ? '✅ Success' : `❌ Failed`}
+                                {results[index].evidence && (
+                                    <div className="mt-1">
+                                        <a href={results[index].evidence} target="_blank" rel="noopener noreferrer" className="underline text-blue-500">View Evidence</a>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 ))}
             </div>
