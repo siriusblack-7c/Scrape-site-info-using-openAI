@@ -9,6 +9,7 @@ import os
 from datetime import datetime
 import requests
 from dotenv import load_dotenv
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
 
@@ -23,6 +24,12 @@ app.add_middleware(
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Make sure the static directory exists
+os.makedirs("static", exist_ok=True)
+
+# Mount the static directory
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 class Step(BaseModel):
     content: str
@@ -53,8 +60,8 @@ async def run_playwright_test(step: Step) -> Step:
             # Helper for error logging
             async def log_error_and_return(e, label="error"):
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-                screenshot_path = f"{label}_screenshot_{timestamp}.png"
-                html_path = f"{label}_page_{timestamp}.html"
+                screenshot_path = f"static/{label}_screenshot_{timestamp}.png"
+                html_path = f"static/{label}_page_{timestamp}.html"
                 await page.screenshot(path=screenshot_path)
                 content = await page.content()
                 with open(html_path, "w", encoding="utf-8") as f:
@@ -67,8 +74,8 @@ async def run_playwright_test(step: Step) -> Step:
             # Helper to log and save every step
             async def log_and_save_step(label):
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-                screenshot_path = f"step_{label}_{timestamp}.png"
-                html_path = f"step_{label}_{timestamp}.html"
+                screenshot_path = f"static/step_{label}_{timestamp}.png"
+                html_path = f"static/step_{label}_{timestamp}.html"
                 await page.screenshot(path=screenshot_path)
                 content = await page.content()
                 with open(html_path, "w", encoding="utf-8") as f:
