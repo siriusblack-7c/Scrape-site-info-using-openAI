@@ -4,19 +4,19 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update -q && \
     apt-get install -y -qq --no-install-recommends \
-        xvfb \
-        libxcomposite1 \
-        libxdamage1 \
-        libatk1.0-0 \
-        libasound2 \
-        libdbus-1-3 \
-        libnspr4 \
-        libgbm1 \
-        libatk-bridge2.0-0 \
-        libcups2 \
-        libxkbcommon0 \
-        libatspi2.0-0 \
-        libnss3 \
+    xvfb \
+    libxcomposite1 \
+    libxdamage1 \
+    libatk1.0-0 \
+    libasound2 \
+    libdbus-1-3 \
+    libnspr4 \
+    libgbm1 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libxkbcommon0 \
+    libatspi2.0-0 \
+    libnss3 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -30,4 +30,4 @@ COPY . .
 
 ENV DISPLAY=:99
 
-CMD Xvfb :99 -screen 0 1024x768x16 & uvicorn main:app --host 0.0.0.0 --port 8000 
+CMD Xvfb :99 -screen 0 1024x768x16 & uvicorn main:app --host 0.0.0.0 --port $PORT 
