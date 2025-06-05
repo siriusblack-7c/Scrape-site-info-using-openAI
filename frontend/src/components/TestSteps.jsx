@@ -73,7 +73,7 @@ function TestSteps({ steps, websiteUrl }) {
         setCurrentStep(-1);
     };
 
-    // Skip a single step and run the next one, but keep error info and remove skip button
+    // Skip a single step and continue testing all remaining steps
     const handleSkipStep = async (stepIdx) => {
         let newResults = [...results];
         // Mark as skipped but keep error and evidence
@@ -83,33 +83,9 @@ function TestSteps({ steps, websiteUrl }) {
             // error and evidence remain unchanged
         };
         setResults([...newResults]);
-        // Run the next step if it exists
+        // Continue testing all remaining steps
         if (stepIdx + 1 < steps.length) {
-            setCurrentStep(stepIdx + 1);
-            setTesting(true);
-            setError(null);
-            try {
-                const response = await axios.post(
-                    `${backendUrl}/test-steps`,
-                    { steps: [{ content: JSON.stringify(steps[stepIdx + 1]) }] }
-                );
-                const resultStep = response.data.steps[0];
-                newResults[stepIdx + 1] = {
-                    status: resultStep.error ? 'failed' : 'success',
-                    error: resultStep.error,
-                    evidence: resultStep.evidence,
-                };
-                setResults([...newResults]);
-            } catch (err) {
-                newResults[stepIdx + 1] = {
-                    status: 'failed',
-                    error: err.response?.data?.detail || err.message,
-                    evidence: null,
-                };
-                setResults([...newResults]);
-            }
-            setTesting(false);
-            setCurrentStep(-1);
+            await handleTestAllSteps(stepIdx + 1);
         }
     };
 
