@@ -4,7 +4,6 @@ import axios from "axios";
 const backendUrl = import.meta.env.VITE_BACKEND_URL || process.env.REACT_APP_BACKEND_URL || "http://localhost:8000";
 
 export async function callOpenAI(prompt) {
-    console.log("BACKEND_URL", backendUrl);
     try {
         const response = await axios.post(
             `${backendUrl}/openai-proxy`,

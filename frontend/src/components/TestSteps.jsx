@@ -50,6 +50,76 @@ function TestSteps({ steps, websiteUrl }) {
         setSkipping(false);
     };
 
+    // Retry a single step
+    const handleRetryStep = async (stepIdx) => {
+        setCurrentStep(stepIdx);
+        setTesting(true);
+        setError(null);
+        let newResults = [...results];
+        try {
+            const response = await axios.post(
+                `${backendUrl}/test-steps`,
+                { steps: [{ content: JSON.stringify(steps[stepIdx]) }] }
+            );
+            const resultStep = response.data.steps[0];
+            newResults[stepIdx] = {
+                status: resultStep.error ? 'failed' : 'success',
+                error: resultStep.error,
+                evidence: resultStep.evidence,
+            };
+            setResults([...newResults]);
+        } catch (err) {
+            newResults[stepIdx] = {
+                status: 'failed',
+                error: err.response?.data?.detail || err.message,
+                evidence: null,
+            };
+            setResults([...newResults]);
+        }
+        setTesting(false);
+        setCurrentStep(-1);
+    };
+
+    // Skip a single step and run the next one, but keep error info and remove skip button
+    const handleSkipStep = async (stepIdx) => {
+        let newResults = [...results];
+        // Mark as skipped but keep error and evidence
+        newResults[stepIdx] = {
+            ...newResults[stepIdx],
+            status: 'skipped',
+            // error and evidence remain unchanged
+        };
+        setResults([...newResults]);
+        // Run the next step if it exists
+        if (stepIdx + 1 < steps.length) {
+            setCurrentStep(stepIdx + 1);
+            setTesting(true);
+            setError(null);
+            try {
+                const response = await axios.post(
+                    `${backendUrl}/test-steps`,
+                    { steps: [{ content: JSON.stringify(steps[stepIdx + 1]) }] }
+                );
+                const resultStep = response.data.steps[0];
+                newResults[stepIdx + 1] = {
+                    status: resultStep.error ? 'failed' : 'success',
+                    error: resultStep.error,
+                    evidence: resultStep.evidence,
+                };
+                setResults([...newResults]);
+            } catch (err) {
+                newResults[stepIdx + 1] = {
+                    status: 'failed',
+                    error: err.response?.data?.detail || err.message,
+                    evidence: null,
+                };
+                setResults([...newResults]);
+            }
+            setTesting(false);
+            setCurrentStep(-1);
+        }
+    };
+
     if (!steps.length) return null;
 
     return (
@@ -72,22 +142,13 @@ function TestSteps({ steps, websiteUrl }) {
                     ) : null}
                     Test All Steps
                 </button>
-                {error && (
-                    <button
-                        className="ml-2 px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:bg-yellow-300"
-                        onClick={handleSkip}
-                        disabled={testing || skipping}
-                    >
-                        Skip
-                    </button>
-                )}
             </div>
             {error && <div className="p-2 bg-red-100 text-red-800 rounded">Error: {error}</div>}
             <div className="space-y-4 bg">
                 {steps.map((step, index) => (
                     <div
                         key={index}
-                        className="p-4 bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition duration-150 ease-in-out"
+                        className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition duration-150 ease-in-out"
                     >
                         <div className="flex items-start space-x-4">
                             <span className="flex-shrink-0 h-8 w-8 rounded-full bg-indigo-200 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 flex items-center justify-center font-medium ring-2 ring-indigo-50 dark:ring-indigo-900">
@@ -138,6 +199,24 @@ function TestSteps({ steps, websiteUrl }) {
                                                         <a href={makeAbsolute(htmlMatch[1].trim())} target="_blank" rel="noopener noreferrer" className="underline text-blue-500">View HTML</a>
                                                     </>
                                                 )}
+                                                <div className="flex gap-2 mt-2">
+                                                    {results[index].status !== 'skipped' && (
+                                                        <button
+                                                            className="px-2 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-xs"
+                                                            onClick={() => handleSkipStep(index)}
+                                                            disabled={testing}
+                                                        >
+                                                            Skip
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
+                                                        onClick={() => handleRetryStep(index)}
+                                                        disabled={testing}
+                                                    >
+                                                        Retry
+                                                    </button>
+                                                </div>
                                             </>;
                                         })()}
                                     </div>
