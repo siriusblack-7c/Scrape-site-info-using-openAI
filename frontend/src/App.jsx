@@ -11,9 +11,10 @@ function App() {
   const [testSteps, setTestSteps] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [theme, setTheme] = useState('light');
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
 
   useEffect(() => {
+    localStorage.setItem('theme', theme);
     if (theme === 'dark') {
       document.body.classList.add('dark');
     } else {
